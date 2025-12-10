@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="step-indicator">
+            <div class="step completed">
+                <div class="number">1</div>
+                <div class="label">需求分析</div>
+            </div>
+            <div class="step completed">
+                <div class="number">2</div>
+                <div class="label">AHP评估</div>
+            </div>
+            <div class="step active">
+                <div class="number">3</div>
+                <div class="label">提示词生成</div>
+            </div>
+            <div class="step">
+                <div class="number">4</div>
+                <div class="label">概念筛选</div>
+            </div>
+            <div class="step">
+                <div class="number">5</div>
+                <div class="label">设计评估</div>
+            </div>
+        </div>
+
+        <h2>提示词生成与参数调整</h2>
+        <p class="text-muted">将AHP输出的加权指标转化为图像GenAI可识别的参数化提示词</p>
+
+        <!-- 加权指标映射 -->
+        <div class="card">
+            <div class="card-header">
+                <h5>Step 1: 加权指标映射</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="bi bi-lightbulb"></i> 将高权重指标转化为具体的设计约束
+                </div>
+                
+                <div id="weightsList">
+                    {% if weights %}
+                        <h6>AHP权重结果：</h6>
+                        <ul class="list-group">
+                            {% for criterion, weight in weights.items() %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ criterion }}
+                                    <span class="badge bg-primary rounded-pill">{{ "%.2f"|format(weight*100) }}%</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            未找到AHP权重数据，请先完成AHP评估
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="mt-3">
+                    <label for="constraints" class="form-label">设计约束（基于高权重指标）</label>
+                    <textarea class="form-control" id="constraints" rows="3" 
+                              placeholder="例如：强调可达性（权重35%），要求操作简单直观（权重28%）..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- 提示词补充与优化 -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Step 2: 提示词补充与优化</h5>
+            </div>
+            <div class="card-body">
+                <form id="promptForm" action="{{ url_for('prompt_generation') }}" method="post">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="style" class="form-label">风格描述</label>
+                                <input type="text" class="form-control" id="style" name="style" 
+                                       placeholder="例如：现代简约、未来科技、亲和温暖">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="scene" class="form-label">场景补充</label>
+                                <input type="text" class="form-control" id="scene" name="scene" 
+                                       placeholder="例如：社区街道、医疗机构、户外环境">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="technical_terms" class="form-label">技术术语</label>
+                        <input type="text" class="form-control" id="technical_terms" name="technical_terms" 
+                               placeholder="例如：人机工程学、模块化设计、可持续材料">
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- AI参数配置 -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Step 3: 图像GenAI参数配置</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="ai_tool" class="form-label">选择AI工具</label>
+                            <select class="form-control" id="ai_tool" name="ai_tool">
+                                <option value="Midjourney" selected>Midjourney</option>
+                                <option value="Stable Diffusion">Stable Diffusion</option>
+                                <option value="DALL-E">DALL-E</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="image_quality" class="form-label">图像质量</label>
+                            <select class="form-control" id="image_quality" name="image_quality">
+                                <option value="high">高质量</option>
+                                <option value="medium">中等质量</option>
+                                <option value="low">快速生成</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="num_images" class="form-label">生成数量</label>
+                            <input type="number" class="form-control" id="num_images" name="num_images" 
+                                   min="1" max="10" value="4">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="style_consistency" class="form-label">风格一致性阈值 (0-1)</label>
+                            <input type="range" class="form-range" id="style_consistency" name="style_consistency" 
+                                   min="0" max="1" step="0.1" value="0.8">
+                            <div class="text-end"><span id="consistencyValue">0.8</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 最终提示词 -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Step 4: 生成最终提示词方案</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <button class="btn btn-primary" onclick="generateFinalPrompt()">生成提示词</button>
+                </div>
+                
+                <div id="finalPromptContainer" style="display: none;">
+                    <h6>最终提示词：</h6>
+                    <div class="prompt-output" id="finalPrompt"></div>
+                    <div class="text-end mt-3">
+                        <button class="btn btn-secondary btn-copy" data-copy-target="finalPrompt">
+                            <i class="bi bi-clipboard"></i> 复制提示词
+                        </button>
+                        <button class="btn btn-success" onclick="savePrompt()">保存并继续</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 更新滑块值显示
+document.getElementById('style_consistency').addEventListener('input', function() {
+    document.getElementById('consistencyValue').textContent = this.value;
+});
+
+async function generateFinalPrompt() {
+    // 收集所有数据
+    const constraints = document.getElementById('constraints').value;
+    const style = document.getElementById('style').value;
+    const scene = document.getElementById('scene').value;
+    const technical_terms = document.getElementById('technical_terms').value;
+    const ai_tool = document.getElementById('ai_tool').value;
+    const image_quality = document.getElementById('image_quality').value;
+    const num_images = document.getElementById('num_images').value;
+    const style_consistency = document.getElementById('style_consistency').value;
+    
+    if (!constraints) {
+        Utils.showAlert('请先填写设计约束', 'warning');
+        return;
+    }
+    
+    // 构建表单数据
+    const formData = new FormData();
+    formData.append('constraints', constraints);
+    formData.append('style', style);
+    formData.append('scene', scene);
+    formData.append('technical_terms', technical_terms);
+    formData.append('ai_tool', ai_tool);
+    formData.append('image_quality', image_quality);
+    formData.append('num_images', num_images);
+    formData.append('style_consistency', style_consistency);
+    
+    try {
+        const response = await fetch('{{ url_for("prompt_generation") }}', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // 显示最终提示词
+            document.getElementById('finalPrompt').textContent = result.final_prompt;
+            document.getElementById('finalPromptContainer').style.display = 'block';
+            document.getElementById('finalPromptContainer').scrollIntoView({ behavior: 'smooth' });
+            
+            // 更新复制按钮
+            document.querySelector('.btn-copy').dataset.copy = result.final_prompt;
+        }
+    } catch (error) {
+        Utils.showAlert('生成失败：' + error.message, 'danger');
+    }
+}
+
+function savePrompt() {
+    // 跳转到概念筛选页面
+    window.location.href = "{{ url_for('concept_screening') }}";
+}
+
+// 复制功能
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('btn-copy')) {
+        const text = e.target.dataset.copy;
+        navigator.clipboard.writeText(text).then(() => {
+            Utils.showAlert('提示词已复制到剪贴板', 'success');
+        });
+    }
+});
+</script>
+{% endblock %}

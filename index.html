@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="jumbotron bg-light p-5 rounded">
+            <h1 class="display-4">欢迎使用设计需求分析系统</h1>
+            <p class="lead">基于AHP-GRA-TOPSIS的多维度设计评估平台</p>
+            <hr class="my-4">
+            <p>本系统提供完整的设计需求分析流程，从原始数据收集到最终方案评估。</p>
+            
+            <div class="row mt-5">
+                <div class="col-md-3 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="bi bi-file-text display-4 text-primary mb-3"></i>
+                            <h5 class="card-title">需求分析</h5>
+                            <p class="card-text">收集原始数据，提取用户痛点和需求</p>
+                            <a href="/demand-analysis" class="btn btn-primary">开始</a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="bi bi-diagram-3 display-4 text-success mb-3"></i>
+                            <h5 class="card-title">AHP评估</h5>
+                            <p class="card-text">构建需求框架，量化指标权重</p>
+                            <a href="/ahp-evaluation" class="btn btn-success">开始</a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="bi bi-chat-square-text display-4 text-warning mb-3"></i>
+                            <h5 class="card-title">提示词生成</h5>
+                            <p class="card-text">生成AI图像生成的优化提示词</p>
+                            <a href="/prompt-generation" class="btn btn-warning">开始</a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-3 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="bi bi-graph-up display-4 text-danger mb-3"></i>
+                            <h5 class="card-title">方案评估</h5>
+                            <p class="card-text">定量评估方案，提供优化建议</p>
+                            <a href="/design-evaluation" class="btn btn-danger">开始</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-5">
+                <h4>使用流程</h4>
+                <div class="progress" style="height: 40px;">
+                    <div class="progress-bar" role="progressbar" style="width: 20%">需求收集</div>
+                    <div class="progress-bar bg-success" role="progressbar" style="width: 20%">AHP分析</div>
+                    <div class="progress-bar bg-warning" role="progressbar" style="width: 20%">提示词生成</div>
+                    <div class="progress-bar bg-info" role="progressbar" style="width: 20%">概念筛选</div>
+                    <div class="progress-bar bg-danger" role="progressbar" style="width: 20%">方案评估</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

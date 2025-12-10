@@ -1,0 +1,387 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="step-indicator">
+                <div class="step completed">
+                    <div class="number">1</div>
+                    <div>需求分析</div>
+                </div>
+                <div class="step active">
+                    <div class="number">2</div>
+                    <div>AHP评估</div>
+                </div>
+                <div class="step">
+                    <div class="number">3</div>
+                    <div>提示词生成</div>
+                </div>
+                <div class="step">
+                    <div class="number">4</div>
+                    <div>概念筛选</div>
+                </div>
+                <div class="step">
+                    <div class="number">5</div>
+                    <div>方案评估</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">AHP专家评估模块</h4>
+                </div>
+                <div class="card-body">
+                    <h5>Step 1: 构建AHP三层框架</h5>
+                    
+                    <form id="frameworkForm" method="POST">
+                        <div class="mb-3">
+                            <label class="form-label">目标层</label>
+                            <input type="text" class="form-control" name="goal" value="社区医疗车辆设计优化" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">准则层（输入多个准则，每行一个）</label>
+                            <textarea class="form-control" name="criteria[]" rows="3" required>功能性
+可用性
+安全性
+经济性</textarea>
+                            <div class="form-text">每个准则将作为AHP比较矩阵的一行/列</div>
+                        </div>
+                        
+                        <div id="subCriteriaContainer">
+                            <!-- 子准则会动态生成 -->
+                        </div>
+                        
+                        <button type="button" class="btn btn-secondary mb-3" onclick="addSubCriteria()">添加子准则层</button>
+                        <br>
+                        <button type="submit" class="btn btn-primary">生成AHP框架</button>
+                    </form>
+                    
+                    <div id="ahpMatrixSection" style="display: none;" class="mt-4">
+                        <h5>Step 2: AHP矩阵打分</h5>
+                        <div class="card">
+                            <div class="card-body">
+                                <p class="text-muted">使用9点量表对每对准则进行重要性比较（1=同等重要，9=极端重要）</p>
+                                <div id="matrixContainer">
+                                    <!-- 矩阵会动态生成 -->
+                                </div>
+                                <div class="mt-3">
+                                    <button class="btn btn-success" onclick="calculateAHP()">计算权重和一致性</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="resultSection" style="display: none;" class="mt-4">
+                            <h5>Step 3: 一致性检验结果</h5>
+                            <div class="card">
+                                <div class="card-body">
+                                    <div id="consistencyResult">
+                                        <!-- 结果会动态显示 -->
+                                    </div>
+                                    <div class="mt-3">
+                                        <button class="btn btn-primary" onclick="proceedToPrompt()">进入提示词生成</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let criteria = [];
+let subCriteria = {};
+let ahpMatrix = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    // 初始化子准则
+    addSubCriteria();
+    
+    // 框架表单提交
+    document.getElementById('frameworkForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 处理中...';
+        
+        try {
+            const response = await fetch('/ahp-evaluation', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // 保存准则和子准则
+                criteria = result.framework.criteria;
+                subCriteria = result.framework.sub_criteria;
+                
+                // 生成AHP矩阵
+                generateAHPMatrix();
+                
+                document.getElementById('ahpMatrixSection').style.display = 'block';
+                Utils.showAlert('AHP框架生成成功！', 'success');
+                
+                // 滚动到矩阵部分
+                document.getElementById('ahpMatrixSection').scrollIntoView({ behavior: 'smooth' });
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            Utils.showAlert('处理失败，请重试', 'danger');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+        }
+    });
+});
+
+function addSubCriteria() {
+    const container = document.getElementById('subCriteriaContainer');
+    const index = container.children.length;
+    
+    const div = document.createElement('div');
+    div.className = 'mb-3';
+    div.innerHTML = `
+        <label class="form-label">子准则层 ${index + 1}（对应准则层 "${['功能性', '可用性', '安全性', '经济性'][index] || '准则' + (index + 1)}"）</label>
+        <textarea class="form-control" name="sub_criteria_${index}[]" rows="2">${getDefaultSubCriteria(index)}</textarea>
+        <div class="form-text">输入多个子准则，每行一个</div>
+    `;
+    
+    container.appendChild(div);
+}
+
+function getDefaultSubCriteria(index) {
+    const defaults = [
+        '车辆尺寸\n载重能力\n设备配置\n续航里程',
+        '操作界面\n使用流程\n维护便利\n环境适应性',
+        '结构安全\n电气安全\n医疗安全\n应急处理',
+        '制造成本\n运营成本\n维护成本\n投资回报'
+    ];
+    return defaults[index] || '';
+}
+
+function generateAHPMatrix() {
+    const container = document.getElementById('matrixContainer');
+    container.innerHTML = '';
+    
+    // 创建矩阵表格
+    let html = `<table class="table table-bordered ahp-matrix">
+        <thead>
+            <tr>
+                <th></th>`;
+    
+    criteria.forEach(criterion => {
+        html += `<th>${criterion}</th>`;
+    });
+    html += `</tr></thead><tbody>`;
+    
+    // 初始化矩阵（单位矩阵）
+    ahpMatrix = [];
+    for (let i = 0; i < criteria.length; i++) {
+        const row = [];
+        html += `<tr><th>${criteria[i]}</th>`;
+        
+        for (let j = 0; j < criteria.length; j++) {
+            if (i === j) {
+                row.push(1);
+                html += `<td><input type="number" class="form-control" value="1" readonly></td>`;
+            } else if (i < j) {
+                row.push(1);
+                html += `<td><input type="number" class="form-control matrix-input" 
+                    data-row="${i}" data-col="${j}" value="1" min="1" max="9" step="1"></td>`;
+            } else {
+                html += `<td><input type="number" class="form-control" readonly></td>`;
+            }
+        }
+        
+        html += `</tr>`;
+        ahpMatrix.push(row);
+    }
+    
+    html += `</tbody></table>
+        <div class="alert alert-info">
+            <strong>打分说明：</strong> 1=同等重要，3=稍微重要，5=明显重要，7=强烈重要，9=极端重要<br>
+            2,4,6,8为中间值。输入值应为1-9的整数。
+        </div>`;
+    
+    container.innerHTML = html;
+    
+    // 添加矩阵输入事件监听
+document.querySelectorAll('.matrix-input').forEach(input => {
+    input.addEventListener('change', function() {
+        const row = parseInt(this.dataset.row);
+        const col = parseInt(this.dataset.col);
+        const value = parseFloat(this.value);
+        
+        if (!isNaN(value) && value >= 1 && value <= 9) {
+            ahpMatrix[row][col] = value;
+            ahpMatrix[col][row] = 1 / value;
+            
+            // 更新对称位置的值显示
+            const oppositeInput = document.querySelector(`.matrix-input[data-row="${col}"][data-col="${row}"]`);
+            if (oppositeInput) {
+                const reciprocalValue = (1 / value).toFixed(3);
+                oppositeInput.value = reciprocalValue;
+                oppositeInput.classList.remove('is-invalid');
+            }
+            
+            this.classList.remove('is-invalid');
+        } else {
+            this.value = '';
+            this.classList.add('is-invalid');
+            ahpMatrix[row][col] = null;
+            Utils.showAlert('请输入1-9之间的数字', 'warning');
+        }
+    });
+    
+    // 添加输入时验证
+    input.addEventListener('input', function() {
+        const value = parseFloat(this.value);
+        if (value >= 1 && value <= 9) {
+            this.classList.remove('is-invalid');
+        } else {
+            this.classList.add('is-invalid');
+        }
+    });
+});
+}
+
+async function calculateAHP() {
+    // 先检查所有输入是否已填写
+    const inputs = document.querySelectorAll('.matrix-input');
+    let hasEmpty = false;
+    
+    inputs.forEach(input => {
+        if (!input.value || input.value.trim() === '') {
+            hasEmpty = true;
+            input.classList.add('is-invalid');
+        } else {
+            input.classList.remove('is-invalid');
+        }
+    });
+    
+    if (hasEmpty) {
+        Utils.showAlert('请填写所有矩阵比较值', 'warning');
+        return;
+    }
+    
+    // 收集矩阵数据
+    const matrix = [];
+    for (let i = 0; i < criteria.length; i++) {
+        const row = [];
+        for (let j = 0; j < criteria.length; j++) {
+            if (i === j) {
+                row.push(1);
+            } else if (i < j) {
+                const value = parseFloat(ahpMatrix[i][j]);
+                if (isNaN(value) || value < 1 || value > 9) {
+                    Utils.showAlert(`第${i+1}行第${j+1}列的值无效，请输入1-9之间的数字`, 'warning');
+                    return;
+                }
+                row.push(value);
+            } else {
+                // 计算对称位置的值
+                row.push(1 / ahpMatrix[j][i]);
+            }
+        }
+        matrix.push(row);
+    }
+    
+    // 将矩阵扁平化以便传输
+    const flatMatrix = matrix.flat();
+    
+    // 验证没有NaN或无效值
+    for (let i = 0; i < flatMatrix.length; i++) {
+        if (isNaN(flatMatrix[i]) || !isFinite(flatMatrix[i])) {
+            Utils.showAlert(`矩阵值无效，请检查输入`, 'danger');
+            return;
+        }
+    }
+    
+    try {
+        const response = await fetch('/ahp-evaluation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                matrix: flatMatrix,
+                criteria: criteria
+            })
+        });
+        
+        const result = await response.json();
+        displayConsistencyResult(result);
+        
+    } catch (error) {
+        console.error('Error:', error);
+        Utils.showAlert('计算失败，请重试', 'danger');
+    }
+}
+
+function displayConsistencyResult(result) {
+    const container = document.getElementById('consistencyResult');
+    
+    if (result.error) {
+        container.innerHTML = `<div class="alert alert-danger">计算错误：${result.error}</div>`;
+        return;
+    }
+    
+    let html = `<div class="row">
+        <div class="col-md-6">
+            <h6>一致性指标</h6>
+            <ul class="list-group">
+                <li class="list-group-item">最大特征值：${result.max_eigenvalue.toFixed(4)}</li>
+                <li class="list-group-item">一致性指标(CI)：${result.CI.toFixed(4)}</li>
+                <li class="list-group-item">一致性比率(CR)：${result.CR.toFixed(4)}</li>
+                <li class="list-group-item ${result.consistency ? 'consistency-pass' : 'consistency-fail'}">
+                    一致性检验：${result.consistency ? '通过 (CR < 0.1)' : '不通过 (CR ≥ 0.1)'}
+                </li>
+            </ul>
+        </div>
+        <div class="col-md-6">
+            <h6>权重分配</h6>
+            <ul class="list-group">`;
+    
+    result.weights.forEach((weight, index) => {
+        const criterion = criteria[index] || `准则${index + 1}`;
+        const percentage = (weight * 100).toFixed(2);
+        html += `<li class="list-group-item d-flex justify-content-between align-items-center">
+            ${criterion}
+            <span class="badge bg-primary rounded-pill">${percentage}%</span>
+        </li>`;
+    });
+    
+    html += `</ul></div></div>`;
+    
+    if (!result.consistency) {
+        html += `<div class="alert alert-warning mt-3 alert-highlight">
+            <i class="bi bi-exclamation-triangle"></i> 一致性检验未通过，请重新调整矩阵打分！
+        </div>`;
+    } else {
+        html += `<div class="alert alert-success mt-3">
+            <i class="bi bi-check-circle"></i> 一致性检验通过，权重有效！
+        </div>`;
+    }
+    
+    container.innerHTML = html;
+    document.getElementById('resultSection').style.display = 'block';
+    document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
+}
+
+function proceedToPrompt() {
+    window.location.href = '/prompt-generation';
+}
+</script>
+{% endblock %}
